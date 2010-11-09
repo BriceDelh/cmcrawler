@@ -55,7 +55,7 @@ for l in linkz:
 		bs = BeautifulSoup(src, parseOnlyThese=links) # parse for anchors
 		try:
 			if (giffound == -1) & (jpgfound == -1) & (pngfound == -1) & (pdffound == -1): 
-				print "Crawling\t",l,"\t",code
+				print "Crawling\t",l,"\tpage\t",code
 				# loop through all of the anchors found on the page
 				# crawler only records the FIRST time it finds a link. If a link is on 20 pages
 				# it will still only show up once in the log.
@@ -114,21 +114,21 @@ for l in linkz:
 							imgz.append(cleanUrl)
 							counter = counter + 1
 					except:
-						print sys.exc_info() # debugging only disable this if you want clean output
+						print i,'\t\tfailed unknown reason' # debugging only disable this if you want clean output
 						pass
 		except:
-			print sys.exc_info() # debugging only disable this if you want clean output
+			print l,'\t\tfailed unknown reason' # debugging only disable this if you want clean output
 			pass
 	except URLError, e:
 		if hasattr(e, 'reason'):
-			print 'Reason: ', e.reason
+			print l,'\t\tReason: ', e.reason
 			pass
 		elif hasattr(e, 'code'):
-			print "Crawling\t",l,"\t", e.code
+			print "Crawling\t",l,"\tpage\t", e.code
 			pass
 		else:
 			pass
 	except:
-		print sys.exc_info() # debugging only disable this if you want clean output
+		print l,'\t\tfailed unknown reason' # debugging only disable this if you want clean output
 		pass
 print "Completed at ",strftime("%a, %d %b %Y %H:%M:%S +0000", gmtime()),"\n\n\n",counter," urls in ", (time() - start)
