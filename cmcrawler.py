@@ -5,29 +5,54 @@
 import sys
 import httplib
 import urllib2
-from urllib2 import Request, urlopen, URLError
 import urlparse
 import string
 from BeautifulSoup import BeautifulSoup, SoupStrainer
 from time import gmtime, strftime, time
 
 
+def getPage(root,link):
+	#does all the dirty work re: finding the page in the URL
+	parsedUrl = urlparse.urlparse(link)
+	site = parsedUrl.netloc
+	if (parsedUrl.query):
+		page = parsedUrl.path + '?' + parsedUrl.query
+	else:
+		page = parsedUrl.path
+	if (page == root):
+		page = "/"
+		site = root
+	if (site == ''):
+		site = root
+	if (site != root):
+		external = 1
+	else:
+		external = 0
+	return link, site, page, external
+
+def fixPage(page):
+	#tests to make sure page starts with "/"
+	test = page.find("/",0,1)
+	if (test == -1):
+		page = "/" + page
+	return page
+
+
 print "start time ",strftime("%a, %d %b %Y %H:%M:%S +0000", gmtime()),"\n\n\n"
 try:
-    root = sys.argv[1]
+	root = sys.argv[1]
+	outside = sys.argv[2]
 except IndexError:
-    print "  Usage: ./bscrawler.py link"
-    print "  Example: ./bscrawler.py http://www.portent.com/"
+    print "  Usage: ./bscrawler.py link [crawl external = 0 or 1]"
+    print "  Example: ./bscrawler.py www.portent.com/ 1"
     exit()
 
 linkz = []
 crawled = []
-errorz = []
 imgz = []
 counter = 0
 start = time()
 result=0
-
 parsedRoot = urlparse.urlparse(root)
 
 if parsedRoot.port == 80:
@@ -37,98 +62,114 @@ else:
 
 linkz.append(root)
 
-conn = httplib.HTTPConnection(hostRoot) # open http request
+imageTypes = "jpg,gif,png"
+skipIt = "javascript,mailto"
 
+conn = httplib.HTTPConnection(root)
 
 for l in linkz:
-	pagelinkz = []
-	giffound = l.find('.gif')
-	jpgfound = l.find('.jpg')
-	pngfound = l.find('.png')
-	pdffound = l.find('.pdf')
-	try:
-		conn = urllib2.urlopen(l) # get the url
-		src = conn.read() # read page contents
-		code = conn.code # read response code - later need to make this more sensible
+	e = getPage(root,l)
+	link = e[0]
+	site = e[1]
+	page = e[2]
+	external = e[3]
+	page = fixPage(page)
+	skipCheck = skipIt.find(l)
+	if (outside == 1):
+		skipCheck2 = 0
+	else:
+		if (external == 0):
+			skipCheck2 = 0
+		else:
+			skipCheck2 = 1
+	if (skipCheck == -1) & (skipCheck2 == 0):
+		conn.request("GET", page)
+		code = conn.getresponse() # read response code 
+		src = code.read()
+		src = str(src)
+		flist = l.split('.')
+		ftype = flist[-1]
+		imageCheck = imageTypes.find(ftype)
 		links = SoupStrainer('a') # grab all anchors
 		imgs = SoupStrainer('img') # grab all img elements
-		bs = BeautifulSoup(src, parseOnlyThese=links) # parse for anchors
-		try:
-			if (giffound == -1) & (jpgfound == -1) & (pngfound == -1) & (pdffound == -1): 
-				print "Crawling\t",l,"\tpage\t",code
+		if (imageCheck == -1): 
+			bs = BeautifulSoup(src, parseOnlyThese=links) # parse for anchors
+			if (imageCheck == -1): 
+				print "Crawling\t",l,"\t",code.status
 				# loop through all of the anchors found on the page
 				# crawler only records the FIRST time it finds a link. If a link is on 20 pages
 				# it will still only show up once in the log.
 				for j in bs.findAll('a', {'href':True}):
-					try:
-						testresult = 0
-						absUrl = urlparse.urljoin(l, j['href'])
+					testresult = 0
+					absUrl = urlparse.urljoin(l, j['href'])
+					# check for javascript/mailto
+					checkAbs = absUrl.split(':')
+					checkAbs = checkAbs[0]
+					checkAbs = checkAbs.strip()
+					nskipCheck = skipIt.find(checkAbs)
+					if ((nskipCheck == -1) & (absUrl.find('#') == -1)):
 						absUrl = absUrl.strip()
-						parsedUrl = urlparse.urlparse(absUrl)
-						# check for any images that snuck in via a link
-						giffound = absUrl.find('.gif')
-						jpgfound = absUrl.find('.jpg')
-						pngfound = absUrl.find('.png')
-						if (giffound == -1) & (jpgfound == -1) & (pngfound == -1):
-							filetype = 1
+						absUrl = absUrl.replace(' ','%20')
+						e = getPage(root,absUrl)
+						link = e[0]
+						site = e[1]
+						page = e[2]
+						external = e[3]
+						page = fixPage(page)
+						if (outside == 1):
+							skipCheck2 = 0
 						else:
-							filetype = 2
-						if parsedUrl.port == 80:
-							hostUrl = parsedUrl.netloc[:-3]
-						else:
-							hostUrl = parsedUrl.netloc
-							absUrl = urlparse.urlunparse((parsedUrl.scheme, hostUrl, parsedUrl.path, parsedUrl.params, parsedUrl.query, parsedUrl.fragment))
-						if (parsedUrl.scheme == 'http') & \
-						((parsedUrl.netloc.endswith('.' + hostRoot)) | (parsedUrl.netloc == hostRoot)) & \
-						(absUrl not in linkz) & (filetype == 1):
-							tester = absUrl.find('#')
-							if tester == -1:
-								cleanUrl = absUrl.strip()
-								print '\t' + cleanUrl + '\tpage'
-								linkz.append(cleanUrl)
-								counter = counter + 1
+							if (external == 0):
+								skipCheck2 = 0
 							else:
-								counter = counter + 1
-					except:
-						pass
-			
+								skipCheck2 = 1
+						if (skipCheck2 == 0):
+							if (page not in linkz):
+								conn.request("GET", page)
+								tcode = conn.getresponse() # read response code 
+								conType = tcode.getheader("content-type")
+								conTest = conType.find("text/html")
+								status = str(tcode.status)
+								if (status != '200'):
+									print '\t' + page + '\t' + 'page' + '\t' + status + '\t'
+								else:
+									if (conTest == 0): # only doing pages, thank you very much
+										cleanUrl = absUrl.strip()
+										nimageCheck = imageTypes.find(cleanUrl)
+										if (nimageCheck == -1):
+											thistype = "page"
+											linkz.append(page)
+										else:
+											thistype = "image"
+										print '\t' + page + '\t' + thistype + '\t' + str(tcode.status)
+										counter = counter + 1
+							else:
+								print '\t' + page + '\t' + thistype + '\t' + 'already crawled'
+										
+						else:
+							print '\t' + absUrl + '\t' + 'skipped external URL'
+		
 	# now to try to grab some images on the same page
-	# the crawler records EVERY place images are found, not just the first. Long story, but we needed this at Portent.
 				bsi = BeautifulSoup(src, parseOnlyThese=imgs)
 				for i in bsi.findAll('img', {'src':True}):
 					absUrl = urlparse.urljoin(l, i['src'])
-					parsedUrl = urlparse.urlparse(absUrl)
-					conn = urllib2.urlopen(absUrl) # get the url
-					icode = conn.code # read response code 
-					try:
-						if parsedUrl.port == 80:
-							hostUrl = parsedUrl.netloc[:-3]
-						else:
-							hostUrl = parsedUrl.netloc
-						absUrl = urlparse.urlunparse((parsedUrl.scheme, hostUrl, parsedUrl.path, parsedUrl.params, parsedUrl.query, parsedUrl.fragment))
-						if (parsedUrl.scheme == 'http') & \
-							((parsedUrl.netloc.endswith('.' + hostRoot)) | (parsedUrl.netloc == hostRoot)):
-							cleanUrl = absUrl.strip()
-							cleanUrl = cleanUrl.replace('&','&amp;')
-							print '\t',cleanUrl,'\timage','\t',icode
-							imgz.append(cleanUrl)
-							counter = counter + 1
-					except:
-						print i,'\t\tfailed unknown reason' # debugging only disable this if you want clean output
-						pass
-		except:
-			print l,'\t\tfailed unknown reason' # debugging only disable this if you want clean output
-			pass
-	except URLError, e:
-		if hasattr(e, 'reason'):
-			print l,'\t\tReason: ', e.reason
-			pass
-		elif hasattr(e, 'code'):
-			print "Crawling\t",l,"\tpage\t", e.code
-			pass
-		else:
-			pass
-	except:
-		print l,'\t\tfailed unknown reason' # debugging only disable this if you want clean output
-		pass
+					e = getPage(root,absUrl)
+					external = e[3]
+					img = e[2]
+					site = e[1]
+					img = fixPage(img)
+					if (img not in imgz):
+						conn.request("GET", img)
+						tcode = conn.getresponse() # read response code 
+						conType = tcode.getheader("content-type")
+						if (external == 0):
+							print '\t' + img + '\timage' + '\t' + str(tcode.status)
+					else:
+						print '\t' + img + '\timage' + '\t' + 'already crawled' 
+					counter = counter + 1
+					imgz.append(img)
+
+
+conn.close()
+
 print "Completed at ",strftime("%a, %d %b %Y %H:%M:%S +0000", gmtime()),"\n\n\n",counter," urls in ", (time() - start)
