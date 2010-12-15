@@ -1,7 +1,6 @@
 # bscrawler lite by Ian Lurie
 # Huge kudos to BeautifulSoup
 # lite version differs only in that it does not use database storage
-#
 #!/usr/bin/env python
 import sys
 import httplib
