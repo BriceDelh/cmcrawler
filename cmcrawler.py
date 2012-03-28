@@ -7,7 +7,7 @@ import httplib
 import urllib2
 import urlparse
 import string
-from BeautifulSoup import BeautifulSoup, SoupStrainer
+from bs4 import BeautifulSoup, SoupStrainer
 from time import gmtime, strftime, time
 
 
@@ -95,7 +95,7 @@ for l in linkz:
 			links = SoupStrainer('a') # grab all anchors
 			imgs = SoupStrainer('img') # grab all img elements
 			if (imageCheck == -1): 
-				bs = BeautifulSoup(src, parseOnlyThese=links) # parse for anchors
+				bs = BeautifulSoup(src, parse_only=links) # parse for anchors
 				if (imageCheck == -1): 
 					print "Crawling\t",l,"\t",code.status
 					# loop through all of the anchors found on the page
@@ -154,7 +154,7 @@ for l in linkz:
 								print '\t' + absUrl + '\t' + 'skipped external URL'
 		
 		# now to try to grab some images on the same page
-					bsi = BeautifulSoup(src, parseOnlyThese=imgs)
+					bsi = BeautifulSoup(src, parse_only=imgs)
 					for i in bsi.findAll('img', {'src':True}):
 						absUrl = urlparse.urljoin(l, i['src'])
 						e = getPage(root,absUrl)
